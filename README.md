@@ -1,6 +1,6 @@
 # bioshield
 
-A new Flutter project.
+Prototype of Biometric Authentication Security application on Andriod 
 
 ## Getting Started
 
