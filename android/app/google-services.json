@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "588253206520",
+    "project_id": "bioshield-71eee",
+    "storage_bucket": "bioshield-71eee.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:588253206520:android:bd82cdf7199f1f7d3b280d",
+        "android_client_info": {
+          "package_name": "com.fyp.bioshield"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBPL6W9ZUAJSVRPx_-SGYFrs7nsjTnAO00"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:588253206520:android:b92f4bc90d4fdde33b280d",
+        "android_client_info": {
+          "package_name": "com.fyp.bioshield.bioshield"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBPL6W9ZUAJSVRPx_-SGYFrs7nsjTnAO00"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
