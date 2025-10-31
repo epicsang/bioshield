@@ -5,6 +5,11 @@
 import 'package:flutter/material.dart';
 import 'pricing_screen.dart';
 import '../constants/colors.dart';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:csv/csv.dart';
+import 'package:pdf/widgets.dart' as pw; // 'pdf' package alias
 
 class ScanDetailsScreen extends StatelessWidget {
   final Map<String, dynamic> scan;
@@ -15,7 +20,111 @@ class ScanDetailsScreen extends StatelessWidget {
     required this.scan,
     required this.isPremium,
   });
+  void _saveCsvFileMobile(BuildContext context) async {
+    try {
+      // Example data
+      final data = [
+        ['Name', 'Email', 'Age'],
+        ['Alice', 'alice@example.com', '25'],
+        ['Bob', 'bob@example.com', '30'],
+      ];
 
+      final csvData = const ListToCsvConverter().convert(data);
+
+      // Try to use the Downloads directory
+      Directory? downloadsDir;
+      if (Platform.isAndroid) {
+        downloadsDir = Directory('/storage/emulated/0/Download');
+      } else {
+        downloadsDir = await getDownloadsDirectory();
+      }
+
+      if (downloadsDir == null || !downloadsDir.existsSync()) {
+        downloadsDir = await getApplicationDocumentsDirectory();
+      }
+
+      final filePath = '${downloadsDir.path}/my_data.csv';
+      final file = File(filePath);
+
+      await file.writeAsString(csvData);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('CSV saved successfully to: $filePath')),
+      );
+
+      // Optional: open file picker to confirm location
+      await FilePicker.platform.saveFile(
+        dialogTitle: 'Save your CSV file',
+        fileName: 'my_data.csv',
+        initialDirectory: downloadsDir.path,
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving CSV: $e')),
+      );
+    }
+  }
+void _savePdfFile(BuildContext context) async {
+  try {
+    // Step 1: Create a PDF document
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.Page(
+        build: (pw.Context context) => pw.Center(
+          child: pw.Column(
+            mainAxisAlignment: pw.MainAxisAlignment.center,
+            children: [
+              pw.Text('Biometric Security Report', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 20),
+              pw.Text('Generated securely via Flutter PDF exporter.'),
+              pw.SizedBox(height: 20),
+              pw.Text('User: Alice'),
+              pw.Text('Email: alice@example.com'),
+              pw.Text('Risk Score: 85/100'),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    // Step 2: Get Downloads directory
+    Directory? downloadsDir;
+    if (Platform.isAndroid) {
+      downloadsDir = Directory('/storage/emulated/0/Download');
+    } else {
+      downloadsDir = await getDownloadsDirectory();
+    }
+
+    if (downloadsDir == null || !downloadsDir.existsSync()) {
+      downloadsDir = await getApplicationDocumentsDirectory();
+    }
+
+    // Step 3: Save file to Downloads
+    final filePath = '${downloadsDir.path}/security_report.pdf';
+    final file = File(filePath);
+    await file.writeAsBytes(await pdf.save());
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('PDF saved successfully to: $filePath'),
+      ),
+    );
+
+    // Step 4: Optional “Save As” dialog (File Picker)
+    await FilePicker.platform.saveFile(
+      dialogTitle: 'Save your PDF file',
+      fileName: 'security_report.pdf',
+      initialDirectory: downloadsDir.path,
+    );
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Error saving PDF: $e')
+        ),
+    );
+
+  }
+}
   @override
   Widget build(BuildContext context) {
     final timestamp = (scan['timestamp'] as dynamic).toDate();
@@ -211,6 +320,7 @@ class ScanDetailsScreen extends StatelessWidget {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text("Exporting as PDF...")),
                               );
+                              _savePdfFile(context);
                             },
                             child: const Text("PDF", style: TextStyle(color: kSkyBlue, fontWeight: FontWeight.bold)),
                           ),
@@ -220,6 +330,7 @@ class ScanDetailsScreen extends StatelessWidget {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text("Exporting as CSV...")),
                               );
+                              _saveCsvFileMobile(context);
                             },
                             child: const Text("CSV", style: TextStyle(color: kSkyBlue, fontWeight: FontWeight.bold)),
                           ),
