@@ -1,3 +1,5 @@
+//original scan_screen
+
 // lib/screens/scan_screen.dart
 // Scan Screen — Simulates biometric authentication via Frida hooking
 // Shows "Waiting for response" + 2 buttons to simulate good/bad result
