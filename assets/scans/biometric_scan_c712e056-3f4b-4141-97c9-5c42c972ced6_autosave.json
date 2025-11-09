@@ -1,0 +1,83 @@
+{
+  "metadata": {
+    "scanId": "c712e056-3f4b-4141-97c9-5c42c972ced6",
+    "timestamp": "2025-11-05T17:30:42.442Z",
+    "scanDuration": 0,
+    "targetPackage": "",
+    "deviceInfo": {
+      "manufacturer": "Google",
+      "model": "sdk_gphone64_x86_64",
+      "device": "emu64xa",
+      "androidVersion": "16",
+      "sdkInt": 36,
+      "brand": "google",
+      "fingerprint": "google/sdk_gphone64_x86_64/emu64xa:16/BE2A.250530.026.F3/13894323:userdebug/dev-keys"
+    }
+  },
+  "vulnerabilities": [
+    {
+      "type": "API_MISCONFIGURATION",
+      "severity": "HIGH",
+      "category": "API Configuration",
+      "title": "Negative Button Present - Bypass Risk",
+      "description": "BiometricPrompt is configured with a negative button that allows users to bypass biometric authentication entirely without providing credentials.",
+      "technicalDetails": {
+        "negativeButtonText": "Cancel",
+        "location": "BiometricPrompt.PromptInfo.Builder.build()",
+        "apiLevel": "androidx.biometric"
+      },
+      "impact": "An attacker with physical device access can bypass biometric authentication by tapping the cancel/negative button.",
+      "mitigation": "Remove setNegativeButtonText() and use setDeviceCredentialAllowed(true) for fallback authentication.",
+      "codeSnippet": {
+        "vulnerable": ".setNegativeButtonText(\"Cancel\")",
+        "secure": ".setDeviceCredentialAllowed(true) // Use device credential as fallback"
+      },
+      "references": [
+        "https://developer.android.com/training/sign-in/biometric-auth",
+        "https://source.android.com/security/biometric"
+      ],
+      "id": "de3ea18f-dbc9-4236-8f70-d1b8aa09b9be",
+      "detectedAt": "2025-11-05T17:30:52.533Z"
+    }
+  ],
+  "timingData": {
+    "attempts": [],
+    "successTimes": [],
+    "failureTimes": [],
+    "analysis": null
+  },
+  "apiFindings": [
+    {
+      "type": "INFO",
+      "category": "UI Configuration",
+      "details": {
+        "title": "Biometric Login (No Auth Required)",
+        "subtitle": "Log in using your biometric credential with key that doesn't require auth",
+        "description": null
+      }
+    },
+    {
+      "type": "SECURE_PRACTICE",
+      "category": "Cryptographic Binding",
+      "title": "CryptoObject Used",
+      "description": "Authentication is cryptographically bound to sensitive operations",
+      "timestamp": "2025-11-05T17:30:52.704Z"
+    }
+  ],
+  "cryptoFindings": [
+    {
+      "type": "SECURE_PRACTICE",
+      "category": "Key Storage",
+      "title": "Android KeyStore Used",
+      "description": "Application properly uses Android KeyStore for secure key storage"
+    },
+    {
+      "type": "KEY_GENERATION",
+      "algorithm": "AES",
+      "timestamp": "2025-11-05T17:30:52.662Z"
+    }
+  ],
+  "storageFindings": [],
+  "networkFindings": [],
+  "memoryFindings": []
+}

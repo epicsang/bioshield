@@ -2,6 +2,10 @@
 // Unified Dashboard with Tabbed Navigation — matches all wireframes
 // Persistent Bottom Nav, Sign Out button, Real Data, Free/Premium UX, Email Verification
 
+import 'dart:convert';
+import 'package:flutter/services.dart' show rootBundle;
+import 'dart:io';
+import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -30,6 +34,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
   int _freeScanCount = 3;
   List<Map<String, dynamic>> _recentScans = [];
+  List<Map<String, dynamic>> _topVulnerabilities = [];
   bool _isLoading = true;
 
   @override
@@ -44,7 +49,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       setState(() {
         widget.user = user.copyWith();
       });
-      _loadRecentScans();
+      _loadRecentScans(); // Now loads from JSONs instead of Firestore
     }
   }
 
@@ -52,7 +57,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return null;
-
       final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       if (doc.exists) {
         return UserModel.fromMap(doc.data() as Map<String, dynamic>);
@@ -66,26 +70,69 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _loadRecentScans() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        setState(() => _isLoading = false);
-        return;
+      setState(() => _isLoading = true);
+
+      // List of scan files inside assets/scans/
+      final manifestContent = await rootBundle.loadString('AssetManifest.json');
+      final Map<String, dynamic> manifestMap = json.decode(manifestContent);
+
+      // Get all JSONs in assets/scans/
+      final scanFiles = manifestMap.keys
+          .where((path) => path.startsWith('assets/scans/') && path.endsWith('.json'))
+          .toList();
+
+      final List<Map<String, dynamic>> scans = [];
+      final Map<String, int> vulnCount = {};
+      final Map<String, String> vulnImpactMap = {};
+
+      for (final path in scanFiles) {
+        final jsonString = await rootBundle.loadString(path);
+        final data = json.decode(jsonString);
+
+        // --- Parse scan metadata ---
+        if (data.containsKey('metadata')) {
+          final meta = data['metadata'];
+          final date = DateTime.tryParse(meta['timestamp'].toString()) ?? DateTime.now();
+          final riskScore = (data['findings']?['riskScore'] ?? 0).toDouble();
+
+          scans.add({
+            'timestamp': date,
+            'riskScore': riskScore,
+            'resultSummary': data['findings']?['summary'] ?? 'No summary available',
+            'biometricType': meta['deviceModel'] ?? 'Unknown Device',
+          });
+        }
+
+        // --- Parse vulnerabilities ---
+        if (data.containsKey('vulnerabilities')) {
+          for (var vuln in data['vulnerabilities']) {
+            final name = vuln['type'] ?? 'Unknown';
+            vulnCount[name] = (vulnCount[name] ?? 0) + 1;
+            if (vuln.containsKey('impact')) {
+              vulnImpactMap[name] = vuln['impact'];
+            }
+          }
+        }
       }
 
-      QuerySnapshot querySnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('scans')
-          .orderBy('timestamp', descending: true)
-          .limit(widget.user.isPremium ? 5 : 1)
-          .get();
+      // Sort vulnerabilities and pick top 3
+      final top3 = vulnCount.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+
+      final topVulns = top3.take(3).map((entry) {
+        return {
+          'name': entry.key,
+          'impact': vulnImpactMap[entry.key] ?? 'No impact description available',
+        };
+      }).toList();
 
       setState(() {
-        _recentScans = querySnapshot.docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
+        _recentScans = scans.take(widget.user.isPremium ? 5 : 1).toList();
+        _topVulnerabilities = topVulns;
         _isLoading = false;
       });
     } catch (e) {
-      print("Error loading scans: $e");
+      print("Error loading scans from assets: $e");
       setState(() => _isLoading = false);
     }
   }
@@ -179,7 +226,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     }
   }
-
+  String _getAppBarTitle() {
+    switch (_selectedIndex) {
+      case 0: return widget.user.isPremium ? "Premium Dashboard" : "Free Dashboard";
+      case 1: return "Run Scan";
+      case 2: return "Scan History";
+      case 3: return "Profile";
+      default: return "BioShield";
+    }
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -236,15 +291,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: IndexedStack(
         index: _selectedIndex,
         children: [
-          // Tab 0: Dashboard
           _buildDashboardContent(),
-          // Tab 1: Scan (empty — handled by _runScan)
           Container(),
-          // Tab 2: Scan History — NO Scaffold, NO AppBar
-          ScanHistoryScreen(
-            isPremium: widget.user.isPremium,
-          ),
-          // Tab 3: Profile
+          ScanHistoryScreen(isPremium: widget.user.isPremium, jsonAssetPath: ''),
           ProfileScreen(
             user: widget.user,
             onUpgradePressed: () {
@@ -277,6 +326,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               );
             },
+
             onDeletePressed: () {
               showDialog(
                 context: context,
@@ -325,93 +375,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  String _getAppBarTitle() {
-    switch (_selectedIndex) {
-      case 0: return widget.user.isPremium ? "Premium Dashboard" : "Free Dashboard";
-      case 1: return "Run Scan";
-      case 2: return "Scan History";
-      case 3: return "Profile";
-      default: return "BioShield";
-    }
-  }
-
+  // ✅ Modified Dashboard content to include horizontal vulnerability cards
   Widget _buildDashboardContent() {
     return Padding(
       padding: const EdgeInsets.all(20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(
-            child: const Text(
-              "BioShield",
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: kAuthNavy,
-              ),
-              textAlign: TextAlign.center,
-            ),
+          const Center(
+            child: Text("BioShield",
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: kAuthNavy)),
           ),
           const SizedBox(height: 20),
-          if (!widget.user.isPremium)
-            _buildScanCounter(_freeScanCount),
+          if (!widget.user.isPremium) _buildScanCounter(_freeScanCount),
           const SizedBox(height: 20),
-          const Text(
-            "Recent Scans",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
+          const Text("Recent Scans", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           if (_isLoading)
-            const Center(child: CircularProgressIndicator()),
-          if (!_isLoading)
+            const Center(child: CircularProgressIndicator())
+          else
             Expanded(
               child: ListView.builder(
                 itemCount: _recentScans.length,
                 itemBuilder: (context, index) {
                   final scan = _recentScans[index];
-                  final timestamp = (scan['timestamp'] as dynamic).toDate();
+                  final timestamp = (scan['timestamp'] as DateTime);
                   final score = (scan['riskScore'] as double).toInt();
-                  final summary = scan['resultSummary'] as String;
 
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ScanDetailsScreen(
-                            scan: scan,
-                            isPremium: widget.user.isPremium,
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            "Scan on ${timestamp.toString().split(' ')[0]}",
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      );
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              "Scan on ${timestamp.toString().split(' ')[0]}",
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Text(
-                            "$score/100",
-                            style: TextStyle(
-                              color: _getScoreColor(score),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
+                        Text(
+                          "$score/100",
+                          style: TextStyle(color: _getScoreColor(score), fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
                   );
                 },
@@ -431,33 +444,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onPressed: () => setState(() => _selectedIndex = 2),
             child: const Text("View Scan History"),
           ),
-          if (widget.user.isPremium)
+          const SizedBox(height: 20),
+
+          // ✅ New horizontal scroll cards for top 3 vulnerabilities
+          if (_topVulnerabilities.isNotEmpty)
             Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 20),
-                const Divider(),
-                const SizedBox(height: 20),
-                const Text("Premium Features", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Text("Top Vulnerabilities",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
-                ListTile(
-                  leading: const Icon(Icons.monitor_heart, color: Colors.green),
-                  title: const Text("Real-Time Monitoring"),
-                  subtitle: const Text("Monitor biometric security in real-time"),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Real-time monitoring coming soon!")),
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.group, color: Colors.blue),
-                  title: const Text("Federated Learning"),
-                  subtitle: const Text("Contribute to improve AI models"),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Federated learning coming soon!")),
-                    );
-                  },
+                SizedBox(
+                  height: 160,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _topVulnerabilities.length,
+                    itemBuilder: (context, index) {
+                      final vuln = _topVulnerabilities[index];
+                      return Container(
+                        width: 220,
+                        margin: const EdgeInsets.only(right: 12),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.2),
+                              blurRadius: 6,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(vuln['name'],
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 16, color: kAuthNavy)),
+                            const SizedBox(height: 8),
+                            Text(
+                              vuln['impact'],
+                              style: const TextStyle(fontSize: 14, color: Colors.black87),
+                              maxLines: 4,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ],
             ),

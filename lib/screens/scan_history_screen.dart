@@ -14,8 +14,10 @@ import 'scan_details_screen.dart';
 
 class ScanHistoryScreen extends StatelessWidget {
   final bool isPremium;
-
-  const ScanHistoryScreen({super.key, required this.isPremium});
+  final String jsonAssetPath;
+  const ScanHistoryScreen({super.key,
+    required this.isPremium,
+    required this.jsonAssetPath});
 
   @override
   Widget build(BuildContext context) {
@@ -71,6 +73,7 @@ class ScanHistoryScreen extends StatelessWidget {
                             builder: (_) => ScanDetailsScreen(
                               scan: scan,
                               isPremium: isPremium,
+                              jsonAssetPath: jsonAssetPath,
                             ),
                           ),
                         );

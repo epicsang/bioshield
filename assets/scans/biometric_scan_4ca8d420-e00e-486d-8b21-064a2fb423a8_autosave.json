@@ -1,0 +1,86 @@
+{
+  "metadata": {
+    "scanId": "4ca8d420-e00e-486d-8b21-064a2fb423a8",
+    "timestamp": "2025-11-05T17:21:56.066Z",
+    "scanDuration": 0,
+    "targetPackage": "",
+    "deviceInfo": {
+      "manufacturer": "Google",
+      "model": "sdk_gphone64_x86_64",
+      "device": "emu64xa",
+      "androidVersion": "16",
+      "sdkInt": 36,
+      "brand": "google",
+      "fingerprint": "google/sdk_gphone64_x86_64/emu64xa:16/BE2A.250530.026.F3/13894323:userdebug/dev-keys"
+    }
+  },
+  "vulnerabilities": [
+    {
+      "type": "API_MISCONFIGURATION",
+      "severity": "HIGH",
+      "category": "API Configuration",
+      "title": "Negative Button Present - Bypass Risk",
+      "description": "BiometricPrompt is configured with a negative button that allows users to bypass biometric authentication entirely without providing credentials.",
+      "technicalDetails": {
+        "negativeButtonText": "Cancel",
+        "location": "BiometricPrompt.PromptInfo.Builder.build()",
+        "apiLevel": "androidx.biometric"
+      },
+      "impact": "An attacker with physical device access can bypass biometric authentication by tapping the cancel/negative button.",
+      "mitigation": "Remove setNegativeButtonText() and use setDeviceCredentialAllowed(true) for fallback authentication.",
+      "codeSnippet": {
+        "vulnerable": ".setNegativeButtonText(\"Cancel\")",
+        "secure": ".setDeviceCredentialAllowed(true) // Use device credential as fallback"
+      },
+      "references": [
+        "https://developer.android.com/training/sign-in/biometric-auth",
+        "https://source.android.com/security/biometric"
+      ],
+      "id": "b30575c8-a877-4045-ae1a-5317c9d52411",
+      "detectedAt": "2025-11-05T17:22:04.245Z"
+    }
+  ],
+  "timingData": {
+    "attempts": [
+      {
+        "result": "SUCCESS",
+        "duration": 0,
+        "timestamp": "2025-11-05T17:22:06.054Z"
+      }
+    ],
+    "successTimes": [
+      0
+    ],
+    "failureTimes": [],
+    "analysis": null
+  },
+  "apiFindings": [
+    {
+      "type": "INFO",
+      "category": "UI Configuration",
+      "details": {
+        "title": "Biometric Login (Crypto)",
+        "subtitle": "Log in using your biometric credential",
+        "description": null
+      }
+    },
+    {
+      "type": "SECURE_PRACTICE",
+      "category": "Cryptographic Binding",
+      "title": "CryptoObject Used",
+      "description": "Authentication is cryptographically bound to sensitive operations",
+      "timestamp": "2025-11-05T17:22:04.382Z"
+    }
+  ],
+  "cryptoFindings": [
+    {
+      "type": "SECURE_PRACTICE",
+      "category": "Key Storage",
+      "title": "Android KeyStore Used",
+      "description": "Application properly uses Android KeyStore for secure key storage"
+    }
+  ],
+  "storageFindings": [],
+  "networkFindings": [],
+  "memoryFindings": []
+}
