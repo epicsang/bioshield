@@ -43,6 +43,7 @@ dependencies:
   provider: ^6.1.2
 
   fl_chart: ^1.1.1 #for charts
+  google_mobile_ads: ^5.2.0 #for AdMob banner ads
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8

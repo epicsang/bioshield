@@ -13,6 +13,7 @@ import '../models/user_model.dart';
 import '../widgets/scan_limit_overlay.dart';
 import '../constants/colors.dart';
 import '../auth/auth_service.dart';
+import '../widgets/top_banner_ad.dart';
 import 'scan_screen.dart';
 import 'scan_history_screen.dart';
 import 'profile_screen.dart';
@@ -288,13 +289,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
         automaticallyImplyLeading: false,
       ),
-      body: IndexedStack(
-        index: _selectedIndex,
+      body: Column(
         children: [
-          _buildDashboardContent(),
-          Container(),
-          ScanHistoryScreen(isPremium: widget.user.isPremium, jsonAssetPath: ''),
-          ProfileScreen(
+          // Show ad banner only for free users
+          if (!widget.user.isPremium) const TopBannerAd(),
+          Expanded(
+            child: IndexedStack(
+              index: _selectedIndex,
+              children: [
+                _buildDashboardContent(),
+                Container(),
+                ScanHistoryScreen(isPremium: widget.user.isPremium, jsonAssetPath: ''),
+                ProfileScreen(
             user: widget.user,
             onUpgradePressed: () {
               setState(() => _selectedIndex = 0);
@@ -368,6 +374,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               );
             },
+          ),
+        ],
+            ),
           ),
         ],
       ),
