@@ -2,6 +2,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'screens/loading_screen.dart';
 import 'screens/landing_page.dart';
 import 'screens/verification_required_screen.dart';
@@ -9,7 +10,12 @@ import 'constants/colors.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase
   await Firebase.initializeApp();
+
+  // Initialize Mobile Ads SDK
+  await MobileAds.instance.initialize();
 
   final auth = FirebaseAuth.instance;
 
