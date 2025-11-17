@@ -62,8 +62,8 @@ class ScanHistoryScreen extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final scan = scans[index];
                     final timestamp = (scan['timestamp'] as Timestamp).toDate();
-                    final score = (scan['riskScore'] as double).toInt();
-                    final summary = scan['resultSummary'] as String;
+                    final score = scan['riskScore'] != null ? (scan['riskScore'] as num).toInt() : 0;
+                    final summary = scan['resultSummary'] as String? ?? '';
 
                     return GestureDetector(
                       onTap: () {
