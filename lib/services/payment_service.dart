@@ -194,7 +194,7 @@ class PaymentService {
           'status': SubscriptionStatus.pending.toString().split('.').last,
           'price': plan == SubscriptionPlan.monthly ? MONTHLY_PRICE : YEARLY_PRICE,
           'initiatedAt': FieldValue.serverTimestamp(),
-        }, SetDocumentOptions(merge: true));
+        }, SetOptions(merge: true));
 
         print('✅ Payment link opened successfully');
         return PaymentResult.success('pending');

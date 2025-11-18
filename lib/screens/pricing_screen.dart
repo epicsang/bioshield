@@ -6,8 +6,6 @@ import 'package:flutter/material.dart';
 import '../constants/colors.dart';
 import '../services/payment_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dashboard_screen.dart';
-import '../models/user_model.dart';
 
 class PricingScreen extends StatefulWidget {
   const PricingScreen({super.key});
