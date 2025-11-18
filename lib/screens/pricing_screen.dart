@@ -78,7 +78,7 @@ class _PricingScreenState extends State<PricingScreen> {
                   _buildPlanCard(
                     context,
                     title: "Monthly Plan",
-                    price: "\$9.99/month",
+                    price: "\$19.99/month",
                     savings: null,
                     features: [
                       "✓ Unlimited biometric scans",
@@ -96,8 +96,8 @@ class _PricingScreenState extends State<PricingScreen> {
                   _buildPlanCard(
                     context,
                     title: "Yearly Plan",
-                    price: "\$99.99/year",
-                    savings: "Save \$19.89 (17%)",
+                    price: "\$199.99/year",
+                    savings: "Save \$39.89 (17%)",
                     features: [
                       "✓ Everything in Monthly Plan",
                       "✓ 17% savings vs monthly",

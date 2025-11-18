@@ -111,14 +111,13 @@ class PaymentService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // ✨ STRIPE PAYMENT LINKS
-  // Replace these with your actual Stripe Payment Links from:
-  // https://dashboard.stripe.com/payment-links
-  static const String MONTHLY_PAYMENT_LINK = 'https://buy.stripe.com/test_XXXXX';
-  static const String YEARLY_PAYMENT_LINK = 'https://buy.stripe.com/test_YYYYY';
+  // Generated from: https://dashboard.stripe.com/payment-links
+  static const String MONTHLY_PAYMENT_LINK = 'https://buy.stripe.com/test_fZu7sE2ly5s4awuelA53O01';
+  static const String YEARLY_PAYMENT_LINK = 'https://buy.stripe.com/test_3cI6oAd0c7Ac7ki1yO53O00';
 
   // Pricing (in USD)
-  static const double MONTHLY_PRICE = 9.99;
-  static const double YEARLY_PRICE = 99.99;
+  static const double MONTHLY_PRICE = 19.99;
+  static const double YEARLY_PRICE = 199.99;
 
   /// Get current subscription
   Future<Subscription> getCurrentSubscription() async {
