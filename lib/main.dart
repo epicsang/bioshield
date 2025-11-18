@@ -3,10 +3,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'screens/loading_screen.dart';
 import 'screens/landing_page.dart';
 import 'screens/verification_required_screen.dart';
 import 'constants/colors.dart';
+import 'services/payment_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,6 +18,10 @@ void main() async {
 
   // Initialize Mobile Ads SDK
   await MobileAds.instance.initialize();
+
+  // Initialize Stripe
+  Stripe.publishableKey = PaymentService.STRIPE_PUBLISHABLE_KEY;
+  await Stripe.instance.applySettings();
 
   final auth = FirebaseAuth.instance;
 

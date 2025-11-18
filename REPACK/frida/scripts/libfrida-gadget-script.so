@@ -1,0 +1,43 @@
+console.log("=== FRIDA BIOMETRIC LOGGER START ===");
+
+Java.perform(() => {
+    const BiometricService = Java.use("com.android.server.biometrics.sensors.fingerprint.FingerprintService");
+    const AuthClient = Java.use("com.android.server.biometrics.sensors.fingerprint.FingerprintAuthenticationClient");
+
+    try {
+        AuthClient.onAuthenticated.implementation = function (success, userId) {
+            console.log("[+] Fingerprint onAuthenticated: success=" + success + ", user=" + userId);
+            writeLog("authenticated", success, userId);
+            return this.onAuthenticated(success, userId);
+        };
+    } catch (e) {
+        console.log("Hook failed in FingerprintAuthenticationClient:", e);
+    }
+
+    try {
+        BiometricService.handleAuthenticated.implementation = function (sensorId, userId, isStrong) {
+            console.log("[+] Biometric handleAuthenticated: sensorId=" + sensorId + ", userId=" + userId);
+            writeLog("handle_authenticated", true, userId);
+            return this.handleAuthenticated(sensorId, userId, isStrong);
+        };
+    } catch (e) {
+        console.log("Hook failed in FingerprintService:", e);
+    }
+});
+
+// Write JSON event to shared storage for BioShield
+function writeLog(event, value, uid) {
+    try {
+        const path = "/sdcard/BioShield/logs/logs.jsonl";
+        const line = JSON.stringify({ event, value, uid, ts: Date.now() }) + "\n";
+
+        const f = new File(path, "a");
+        f.write(line);
+        f.close();
+        console.log("[+] Log written to", path);
+    } catch (e) {
+        console.log("Write log failed:", e);
+    }
+}
+
+console.log("=== FRIDA BIOMETRIC LOGGER READY ===");

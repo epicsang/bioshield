@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // BioShield logs collection
+    // Structure: bioshield_logs/{userId}/{packageName}/{eventId}
+    match /bioshield_logs/{userId}/{package}/{event} {
+
+      // Hooked apps can write (no auth required)
+      // This allows repackaged apps to upload biometric events to Firestore
+      allow write: if true;
+
+      // Only BioShield with matching userId can read
+      // For security, users can only read their own logs
+      // Option 1: If using Firebase Auth (recommended)
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      // Option 2: If NOT using Firebase Auth (fallback - less secure)
+      // Uncomment the line below and comment out the line above if not using Firebase Auth
+      // allow read: if true;
+    }
+
+    // Users collection (for BioShield app user data)
+    match /users/{userId} {
+      // Users can read and write their own data
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // Scans subcollection
+      match /scans/{scanId} {
+        // Users can read and write their own scans
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // ML training data collection (for global ML model training)
+    match /ml_training_data/{scanId} {
+      // Authenticated users can write their scan data for ML training
+      allow write: if request.auth != null;
+      // Only admins can read (for ML training purposes)
+      allow read: if request.auth != null && request.auth.token.admin == true;
+    }
+
+    // Deny all other access by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

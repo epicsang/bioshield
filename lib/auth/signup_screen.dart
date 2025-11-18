@@ -35,18 +35,20 @@ class _SignupScreenState extends State<SignupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kAuthNavy,
-      body: Center(
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.only(left: 30, right: 30, bottom: 30), // 👈 No top padding
-          decoration: BoxDecoration(
-            color: kAuthNavy,
-            borderRadius: BorderRadius.circular(42), // 👈 42px radius
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 30),
+            decoration: BoxDecoration(
+              color: kAuthNavy,
+              borderRadius: BorderRadius.circular(42),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
               // Welcome! — at very top
               const Text(
                 "Welcome!",
@@ -342,6 +344,7 @@ class _SignupScreenState extends State<SignupScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
 import '../constants/colors.dart';
+import '../auth/auth_service.dart';
 import 'update_profile_screen.dart';
 import 'dashboard_screen.dart';
 
@@ -22,14 +23,7 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: kSkyBlue,
-        title: const Text("Profile", style: TextStyle(color: kAuthNavy, fontWeight: FontWeight.bold)),
-        foregroundColor: kAuthNavy,
-      ),
-      body: Padding(
+    return Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -102,12 +96,60 @@ class ProfileScreen extends StatelessWidget {
                   side: const BorderSide(color: Colors.red),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                child: const Text("Delete My Account", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                child: const Text("Suspend Account", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () async {
+                  // Show confirmation dialog
+                  final shouldLogout = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: kAuthNavy,
+                      titleTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                      contentTextStyle: const TextStyle(color: Colors.white),
+                      title: const Text("Logout"),
+                      content: const Text("Are you sure you want to logout?"),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text("Cancel", style: TextStyle(color: Colors.white)),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: kSkyBlue),
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text("Logout", style: TextStyle(color: kAuthNavy, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (shouldLogout == true) {
+                    // Perform logout
+                    final authService = AuthService();
+                    await authService.logout();
+
+                    // Navigate to login screen by popping all routes
+                    if (context.mounted) {
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                    }
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text(
+                  "Logout",
+                  style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
           ],
         ),
-      ),
     );
   }
 

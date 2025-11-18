@@ -1,0 +1,7 @@
+{
+  "interaction": {
+    "type": "script",
+    "path": "frida-agent.js"
+  },
+  "runtime": "v8"
+}

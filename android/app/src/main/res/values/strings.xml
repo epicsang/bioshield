@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BioShield</string>
+    <string name="perm_access_hook_logs_desc">Allows BioShield to read biometric security scan logs from hooked applications</string>
+</resources>

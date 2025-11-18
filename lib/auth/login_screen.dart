@@ -19,23 +19,66 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController passwordController = TextEditingController();
   final AuthService _authService = AuthService();
   final ValueNotifier<bool> _isEmailVerifiedNotifier = ValueNotifier<bool>(true);
+  bool _isCheckingAuth = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkExistingAuth();
+  }
+
+  Future<void> _checkExistingAuth() async {
+    // Check if user is already logged in
+    final userData = await _authService.getCurrentUserData();
+    if (userData != null && mounted) {
+      // Check email verification
+      final isVerified = await _authService.isEmailVerified();
+      if (isVerified) {
+        // Auto-login successful, navigate to dashboard
+        widget.onSuccess(userData);
+      } else {
+        // User exists but email not verified
+        setState(() {
+          _isCheckingAuth = false;
+        });
+      }
+    } else {
+      // No existing auth, show login form
+      setState(() {
+        _isCheckingAuth = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Show loading indicator while checking auth
+    if (_isCheckingAuth) {
+      return Scaffold(
+        backgroundColor: kAuthNavy,
+        body: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(kSkyBlue),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: kAuthNavy,
-      body: Center(
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.only(left: 30, right: 30, bottom: 30),
-          decoration: BoxDecoration(
-            color: kAuthNavy,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(42)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.only(left: 30, right: 30, top: 30, bottom: 30),
+            decoration: BoxDecoration(
+              color: kAuthNavy,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(42)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
               const Text(
                 "Welcome Back!",
                 style: TextStyle(
@@ -290,6 +333,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 }

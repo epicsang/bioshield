@@ -11,6 +11,7 @@ class AuthService {
 
   // Sign up a new user with email and password
   // Creates user document in Firestore with default Free membership
+  // Automatically sends verification email
   Future<UserModel?> signup(String email, String password, String name) async {
     try {
       // Create Firebase Auth account
@@ -18,6 +19,10 @@ class AuthService {
         email: email,
         password: password,
       );
+
+      // Send verification email immediately after account creation
+      await cred.user!.sendEmailVerification();
+      print('✅ Verification email sent to $email');
 
       // Create user document in Firestore
       final userModel = UserModel(
@@ -79,6 +84,28 @@ class AuthService {
     final user = _auth.currentUser;
     if (user != null && !user.emailVerified) {
       await user.sendEmailVerification();
+    }
+  }
+
+  // Get current user if logged in (for persistent login)
+  User? getCurrentUser() {
+    return _auth.currentUser;
+  }
+
+  // Get user data from Firestore for current user
+  Future<UserModel?> getCurrentUserData() async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return null;
+
+      final doc = await _db.collection('users').doc(user.uid).get();
+      if (doc.exists) {
+        return UserModel.fromMap(doc.data()!);
+      }
+      return null;
+    } catch (e) {
+      print('Error getting current user data: $e');
+      return null;
     }
   }
 

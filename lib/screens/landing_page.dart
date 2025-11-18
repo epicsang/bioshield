@@ -8,9 +8,11 @@ import '../auth/login_screen.dart';
 import '../auth/signup_screen.dart';
 import '../models/user_model.dart';
 import 'dashboard_screen.dart';
+import 'admin_dashboard_screen.dart';
 import 'pricing_screen.dart';
 import '../constants/colors.dart';
 import '../auth/auth_service.dart';
+import '../services/admin_service.dart';
 
 
 class LandingPage extends StatefulWidget {
@@ -45,7 +47,7 @@ class _LandingPageState extends State<LandingPage> {
     );
   }
 
-  void _handleAuthSuccess(UserModel user) {
+  void _handleAuthSuccess(UserModel user) async {
     Navigator.pop(context);
 
     // Check if email is verified — if not, show overlay
@@ -55,7 +57,20 @@ class _LandingPageState extends State<LandingPage> {
       return;
     }
 
-    // If verified, proceed to dashboard
+    // Check if user is admin
+    final adminService = AdminService();
+    final isAdmin = await adminService.isAdmin();
+
+    if (isAdmin) {
+      // Admin user - go directly to admin dashboard
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+      );
+      return;
+    }
+
+    // If verified and not admin, proceed to regular dashboard
     if (!user.isPremium) {
       _showUpgradePrompt(user);
     } else {
@@ -107,7 +122,21 @@ class _LandingPageState extends State<LandingPage> {
     );
   }
 
-  void _showUpgradePrompt(UserModel user) {
+  Future<void> _showUpgradePrompt(UserModel user) async {
+    // Check if admin before showing upgrade prompt
+    final adminService = AdminService();
+    final isAdmin = await adminService.isAdmin();
+
+    if (isAdmin) {
+      // Admin user - go directly to admin dashboard
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+      );
+      return;
+    }
+
+    // Regular user - show upgrade prompt
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -160,16 +189,13 @@ class _LandingPageState extends State<LandingPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Text(
-                  'BioShield',
-                  style: TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                    color: kAuthNavy,
-                  ),
-                  textAlign: TextAlign.center,
+                // BioShield Icon
+                Image.asset(
+                  'assets/icon.png',
+                  width: 120,
+                  height: 120,
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 20),
                 const Text(
                   'Secure Your Biometrics',
                   style: TextStyle(

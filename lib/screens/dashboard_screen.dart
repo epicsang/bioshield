@@ -2,10 +2,6 @@
 // Unified Dashboard with Tabbed Navigation — matches all wireframes
 // Persistent Bottom Nav, Sign Out button, Real Data, Free/Premium UX, Email Verification
 
-import 'dart:convert';
-import 'package:flutter/services.dart' show rootBundle;
-import 'dart:io';
-import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -14,12 +10,14 @@ import '../widgets/scan_limit_overlay.dart';
 import '../constants/colors.dart';
 import '../auth/auth_service.dart';
 import '../widgets/top_banner_ad.dart';
+import '../services/permissions_service.dart';
 import 'scan_screen.dart';
 import 'scan_history_screen.dart';
 import 'profile_screen.dart';
 import 'pricing_screen.dart';
 import 'landing_page.dart';
 import 'scan_details_screen.dart';
+import 'faq_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   UserModel user;
@@ -35,13 +33,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
   int _freeScanCount = 3;
   List<Map<String, dynamic>> _recentScans = [];
-  List<Map<String, dynamic>> _topVulnerabilities = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    // Request storage permissions on first load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _requestStoragePermissions();
+    });
+  }
+
+  Future<void> _requestStoragePermissions() async {
+    final hasPermission = await PermissionsService.checkStoragePermissions();
+    if (!hasPermission && mounted) {
+      await PermissionsService.requestStoragePermissions(context);
+    }
   }
 
   Future<void> _loadUserData() async {
@@ -73,67 +81,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       setState(() => _isLoading = true);
 
-      // List of scan files inside assets/scans/
-      final manifestContent = await rootBundle.loadString('AssetManifest.json');
-      final Map<String, dynamic> manifestMap = json.decode(manifestContent);
-
-      // Get all JSONs in assets/scans/
-      final scanFiles = manifestMap.keys
-          .where((path) => path.startsWith('assets/scans/') && path.endsWith('.json'))
-          .toList();
-
-      final List<Map<String, dynamic>> scans = [];
-      final Map<String, int> vulnCount = {};
-      final Map<String, String> vulnImpactMap = {};
-
-      for (final path in scanFiles) {
-        final jsonString = await rootBundle.loadString(path);
-        final data = json.decode(jsonString);
-
-        // --- Parse scan metadata ---
-        if (data.containsKey('metadata')) {
-          final meta = data['metadata'];
-          final date = DateTime.tryParse(meta['timestamp'].toString()) ?? DateTime.now();
-          final riskScore = (data['findings']?['riskScore'] ?? 0).toDouble();
-
-          scans.add({
-            'timestamp': date,
-            'riskScore': riskScore,
-            'resultSummary': data['findings']?['summary'] ?? 'No summary available',
-            'biometricType': meta['deviceModel'] ?? 'Unknown Device',
-          });
-        }
-
-        // --- Parse vulnerabilities ---
-        if (data.containsKey('vulnerabilities')) {
-          for (var vuln in data['vulnerabilities']) {
-            final name = vuln['type'] ?? 'Unknown';
-            vulnCount[name] = (vulnCount[name] ?? 0) + 1;
-            if (vuln.containsKey('impact')) {
-              vulnImpactMap[name] = vuln['impact'];
-            }
-          }
-        }
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        setState(() => _isLoading = false);
+        return;
       }
 
-      // Sort vulnerabilities and pick top 3
-      final top3 = vulnCount.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
+      // Load scans from Firestore user's collection
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('scans')
+          .orderBy('timestamp', descending: true)
+          .limit(widget.user.isPremium ? 5 : 3)
+          .get();
 
-      final topVulns = top3.take(3).map((entry) {
-        return {
-          'name': entry.key,
-          'impact': vulnImpactMap[entry.key] ?? 'No impact description available',
-        };
-      }).toList();
+      final List<Map<String, dynamic>> scans = [];
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        // Include ALL fields from Firestore for scan details screen
+        final scanData = Map<String, dynamic>.from(data);
+        scanData['scanId'] = doc.id;
+
+        // Ensure timestamp is converted to DateTime
+        if (scanData['timestamp'] is Timestamp) {
+          scanData['timestamp'] = (scanData['timestamp'] as Timestamp).toDate();
+        }
+
+        scans.add(scanData);
+      }
 
       setState(() {
-        _recentScans = scans.take(widget.user.isPremium ? 5 : 1).toList();
-        _topVulnerabilities = topVulns;
+        _recentScans = scans;
         _isLoading = false;
       });
     } catch (e) {
-      print("Error loading scans from assets: $e");
+      print("Error loading scans from Firestore: $e");
       setState(() => _isLoading = false);
     }
   }
@@ -191,41 +175,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return "High risk detected. Implement secure protocols and sensor-level throttling.";
   }
 
-  void _runScan() {
-    if (!widget.user.isPremium && _freeScanCount <= 0) {
-      showDialog(
-        context: context,
-        builder: (ctx) => const ScanLimitOverlay(),
-      );
-      return;
-    }
-
-    if (!widget.user.isPremium) {
-      setState(() => _freeScanCount--);
-    }
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ScanScreen(isPremium: widget.user.isPremium),
-      ),
-    ).then((result) {
-      if (result != null && result is Map<String, dynamic>) {
-        _saveScanToFirestore(result);
-      }
-    });
-  }
-
   void _onItemTapped(int index) {
+    if (index == 1) {
+      // Check scan limit before switching to scan tab
+      if (!widget.user.isPremium && _freeScanCount <= 0) {
+        showDialog(
+          context: context,
+          builder: (ctx) => const ScanLimitOverlay(),
+        );
+        return;
+      }
+      if (!widget.user.isPremium) {
+        setState(() => _freeScanCount--);
+      }
+    }
+
+    // Reload recent scans when returning to dashboard
+    if (index == 0 && _selectedIndex != 0) {
+      _loadRecentScans();
+    }
+
     setState(() {
       _selectedIndex = index;
     });
-
-    if (index == 1) {
-      _runScan();
-    } else if (index == 2){
-
-    }
   }
   String _getAppBarTitle() {
     switch (_selectedIndex) {
@@ -298,7 +270,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               index: _selectedIndex,
               children: [
                 _buildDashboardContent(),
-                Container(),
+                ScanScreen(isPremium: widget.user.isPremium),
                 ScanHistoryScreen(isPremium: widget.user.isPremium, jsonAssetPath: ''),
                 ProfileScreen(
             user: widget.user,
@@ -337,38 +309,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
               showDialog(
                 context: context,
                 builder: (ctx) => AlertDialog(
-                  title: const Text("Delete Account"),
-                  content: const Text("Are you sure? This action cannot be undone."),
+                  title: const Text("Suspend Account"),
+                  content: const Text("Are you sure you want to suspend your account? You can reactivate it by logging in again."),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx),
                       child: const Text("Cancel"),
                     ),
                     ElevatedButton(
-                      onPressed: () {
+                      onPressed: () async {
                         Navigator.pop(ctx);
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text("Account Deleted"),
-                            content: const Text("Your account and all data have been permanently deleted."),
-                            actions: [
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.pop(ctx);
-                                  Navigator.pushReplacement(
-                                    context,
-                                    MaterialPageRoute(builder: (_) => const LandingPage()),
-                                  );
-                                },
-                                child: const Text("Back to Home"),
-                              ),
-                            ],
-                          ),
-                        );
+
+                        // Suspend account by setting a flag in Firestore
+                        final user = FirebaseAuth.instance.currentUser;
+                        if (user != null) {
+                          await FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(user.uid)
+                              .update({
+                            'accountStatus': 'suspended',
+                            'suspendedAt': FieldValue.serverTimestamp(),
+                          });
+
+                          // Sign out the user
+                          await FirebaseAuth.instance.signOut();
+                        }
+
+                        if (context.mounted) {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text("Account Suspended"),
+                              content: const Text("Your account has been suspended. You can reactivate it by logging in again."),
+                              actions: [
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    Navigator.pushReplacement(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => const LandingPage()),
+                                    );
+                                  },
+                                  child: const Text("Back to Home"),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
                       },
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                      child: const Text("Delete", style: TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                      child: const Text("Suspend", style: TextStyle(color: Colors.white)),
                     ),
                   ],
                 ),
@@ -408,32 +398,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 itemCount: _recentScans.length,
                 itemBuilder: (context, index) {
                   final scan = _recentScans[index];
-                  final timestamp = (scan['timestamp'] as DateTime);
+                  final timestamp = scan['timestamp'] is DateTime
+                      ? scan['timestamp'] as DateTime
+                      : (scan['timestamp'] as Timestamp).toDate();
                   final score = (scan['riskScore'] as double).toInt();
 
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade300),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            "Scan on ${timestamp.toString().split(' ')[0]}",
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                  return GestureDetector(
+                    onTap: () {
+                      // Navigate to scan details screen
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ScanDetailsScreen(
+                            scan: scan,
+                            isPremium: widget.user.isPremium,
+                            jsonAssetPath: '',
                           ),
                         ),
-                        Text(
-                          "$score/100",
-                          style: TextStyle(color: _getScoreColor(score), fontWeight: FontWeight.bold),
-                        ),
-                      ],
+                      );
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              "Scan on ${timestamp.toString().split(' ')[0]}",
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(
+                            "$score/100",
+                            style: TextStyle(color: _getScoreColor(score), fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 },
@@ -441,7 +448,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           const SizedBox(height: 30),
           ElevatedButton(
-            onPressed: _runScan,
+            onPressed: () => _onItemTapped(1),
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
               minimumSize: const Size(double.infinity, 56),
@@ -455,57 +462,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 20),
 
-          // ✅ New horizontal scroll cards for top 3 vulnerabilities
-          if (_topVulnerabilities.isNotEmpty)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // QNA/FAQ Section
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: kSkyBlue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: kSkyBlue, width: 2),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Text("Top Vulnerabilities",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 160,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _topVulnerabilities.length,
-                    itemBuilder: (context, index) {
-                      final vuln = _topVulnerabilities[index];
-                      return Container(
-                        width: 220,
-                        margin: const EdgeInsets.only(right: 12),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.2),
-                              blurRadius: 6,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(vuln['name'],
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 16, color: kAuthNavy)),
-                            const SizedBox(height: 8),
-                            Text(
-                              vuln['impact'],
-                              style: const TextStyle(fontSize: 14, color: Colors.black87),
-                              maxLines: 4,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                const Icon(Icons.help_outline, size: 48, color: kAuthNavy),
+                const SizedBox(height: 12),
+                const Text(
+                  "Have Questions?",
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kAuthNavy),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  "Learn how to use BioShield's security analysis features",
+                  style: TextStyle(fontSize: 14, color: Colors.black87),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const FaqScreen()),
+                    );
+                  },
+                  icon: const Icon(Icons.question_answer, size: 20),
+                  label: const Text("View FAQ & Help"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kAuthNavy,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
               ],
             ),
+          ),
         ],
       ),
     );

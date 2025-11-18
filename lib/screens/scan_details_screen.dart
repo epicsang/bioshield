@@ -1,54 +1,100 @@
-//original details screen
 // lib/screens/scan_details_screen.dart
-// Shows full scan details when user taps a scan in history
-// Matches Wireframes 7.15 (Free) and 7.17 (Premium)
+// Scan Details Screen with Tabs: Overview, Timing Analysis, Mitigations
 
-
-
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:csv/csv.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import '../constants/colors.dart';
 
 class ScanDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> scan;
   final bool isPremium;
-  final String jsonAssetPath; // e.g. 'assets/biometric_scan_01507198-...json'
+  final String jsonAssetPath;
 
-  const ScanDetailsScreen({super.key,
+  const ScanDetailsScreen({
+    super.key,
     required this.scan,
     required this.isPremium,
-    required this.jsonAssetPath});
+    required this.jsonAssetPath,
+  });
 
   @override
   State<ScanDetailsScreen> createState() => _ScanDetailsScreenState();
 }
 
-class _ScanDetailsScreenState extends State<ScanDetailsScreen> {
+class _ScanDetailsScreenState extends State<ScanDetailsScreen> with SingleTickerProviderStateMixin {
   Map<String, dynamic>? scanData;
+  late TabController _tabController;
+  Map<String, dynamic>? deviceInfo;
+
   @override
   void initState() {
     super.initState();
-    _loadJsonFile();
+    _tabController = TabController(length: 3, vsync: this);
+    _loadScanData();
+    _loadDeviceInfo();
   }
 
-  Future<void> _loadJsonFile() async {
-    // Change this line to the scanned JSON file name
-    // Example: 'assets/biometric_scan_<unique-id>_autosave.json'
-    final jsonStr = await rootBundle.loadString(
-        'assets/biometric_scan_01507198-3e8d-42ce-bb92-ee115285c3f0_autosave.json');
-    setState(() => scanData = json.decode(jsonStr));
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
-  bool _isEmpty(dynamic data) =>
-      data == null ||
-          (data is String && data.trim().isEmpty) ||
-          (data is List && data.isEmpty) ||
-          (data is Map && data.isEmpty);
+  Future<void> _loadDeviceInfo() async {
+    try {
+      final DeviceInfoPlugin deviceInfoPlugin = DeviceInfoPlugin();
+      final AndroidDeviceInfo androidInfo = await deviceInfoPlugin.androidInfo;
+
+      setState(() {
+        deviceInfo = {
+          'manufacturer': androidInfo.manufacturer,
+          'model': androidInfo.model,
+          'device': androidInfo.device,
+          'androidVersion': androidInfo.version.release,
+          'sdkInt': androidInfo.version.sdkInt.toString(),
+          'brand': androidInfo.brand,
+          'fingerprint': androidInfo.fingerprint,
+        };
+      });
+    } catch (e) {
+      print('[ScanDetails] Error loading device info: $e');
+    }
+  }
+
+  Future<void> _loadScanData() async {
+    final sideChannelData = widget.scan['side_channel_analysis'] as Map<String, dynamic>? ?? {};
+    final vulnerabilities = (sideChannelData['vulnerabilities'] as List?)?.cast<String>() ?? [];
+
+    // Handle timestamp
+    final timestampValue = widget.scan['timestamp'];
+    String timestampString;
+    if (timestampValue is Timestamp) {
+      timestampString = timestampValue.toDate().toString();
+    } else if (timestampValue is DateTime) {
+      timestampString = timestampValue.toString();
+    } else {
+      timestampString = DateTime.now().toString();
+    }
+
+    setState(() {
+      scanData = {
+        'metadata': {
+          'scanId': widget.scan['scanId'] ?? widget.scan['id'] ?? 'unknown',
+          'timestamp': timestampString,
+          'appName': widget.scan['app_name'] ?? 'Unknown App',
+          'packageName': widget.scan['package_name'] ?? 'Unknown',
+          'riskScore': ((widget.scan['riskScore'] ?? 0) as num).toInt(),
+        },
+        'vulnerabilities': vulnerabilities,
+        'sideChannelData': sideChannelData,
+        'mlResults': {
+          'spoofDetection': sideChannelData['ml_spoof_result'],
+          'anomalyDetection': sideChannelData['ml_anomaly_result'],
+        },
+      };
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,127 +105,274 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen> {
     }
 
     final meta = scanData!['metadata'];
-    final device = meta['deviceInfo'];
-    final vulns = scanData!['vulnerabilities'] ?? [];
-    final timing = scanData!['timingData'];
-    final apiFindings = scanData!['apiFindings'];
-    final cryptoFindings = scanData!['cryptoFindings'];
-    final storageFindings = scanData!['storageFindings'];
-    final networkFindings = scanData!['networkFindings'];
-    final memoryFindings = scanData!['memoryFindings'];
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Scan Details'),
+        title: Text('${meta['appName']} - Scan Details'),
         backgroundColor: kSkyBlue,
         foregroundColor: kAuthNavy,
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: kAuthNavy,
+          unselectedLabelColor: kAuthNavy.withValues(alpha: 0.6),
+          indicatorColor: kAuthNavy,
+          tabs: const [
+            Tab(icon: Icon(Icons.dashboard), text: 'Overview'),
+            Tab(icon: Icon(Icons.timer), text: 'Timing'),
+            Tab(icon: Icon(Icons.security), text: 'Mitigations'),
+          ],
+        ),
       ),
       backgroundColor: Colors.white,
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: ListView(
-          children: [
-            // --- METADATA ---
-            Text("1. Metadata",
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 18, color: kAuthNavy)),
-            const SizedBox(height: 6),
-            Text("Scan ID: ${meta['scanId']}"),
-            Text("Timestamp: ${meta['timestamp']}"),
-            Text("Device: ${device['manufacturer']} ${device['model']} (${device['device']})"),
-            Text("Android Version: ${device['androidVersion']} (SDK ${device['sdkInt']})"),
-            Text("Brand: ${device['brand']}"),
-            Text("Fingerprint: ${device['fingerprint']}"),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildOverviewTab(),
+          _buildTimingTab(),
+          _buildMitigationsTab(),
+        ],
+      ),
+    );
+  }
 
-            const Divider(height: 30),
+  Widget _buildOverviewTab() {
+    final meta = scanData!['metadata'];
+    final vulns = scanData!['vulnerabilities'] as List;
+    final mlResults = scanData!['mlResults'] as Map<String, dynamic>;
+    final score = meta['riskScore'] as int;
 
-            // --- VULNERABILITIES ---
-            if (!_isEmpty(vulns)) ...[
-              Text("2. Vulnerabilities",
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 18, color: kAuthNavy)),
-              const SizedBox(height: 8),
-              ...vulns.map<Widget>((v) => Card(
-                elevation: 2,
-                margin: const EdgeInsets.symmetric(vertical: 6),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("${v['type']} (${v['severity']})",
-                          style:
-                          const TextStyle(fontWeight: FontWeight.bold)),
-                      Text("Category: ${v['category']}"),
-                      Text("Title: ${v['title']}"),
-                      if (!_isEmpty(v['description']))
-                        Text("Description: ${v['description']}"),
-                      if (!_isEmpty(v['impact']))
-                        Text("Impact: ${v['impact']}"),
-                      if (!_isEmpty(v['mitigation']))
-                        Text("Mitigation: ${v['mitigation']}"),
-                      Text("Detected At: ${v['detectedAt']}"),
-                    ],
-                  ),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Risk Score Card
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: _getScoreColor(score).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _getScoreColor(score), width: 2),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Security Score', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                    const SizedBox(height: 8),
+                    Text('$score/100', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: _getScoreColor(score))),
+                  ],
                 ),
-              )),
-              const Divider(height: 30),
-            ],
+                Icon(_getScoreIcon(score), size: 60, color: _getScoreColor(score)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
 
-            // --- TIMING DATA ---
-            if (!_isEmpty(timing)) ...[
-              Text("3. Timing Data",
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 18, color: kAuthNavy)),
-              const SizedBox(height: 8),
-              ...((timing['attempts'] ?? []) as List).map((a) => Text(
-                  "Result: ${a['result']}, Duration: ${a['duration']}s, Timestamp: ${a['timestamp']}")),
-              const Divider(height: 30),
-            ],
+          // Metadata
+          const Text('Scan Information', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kAuthNavy)),
+          const SizedBox(height: 10),
+          _buildInfoRow('Scan ID', meta['scanId']),
+          _buildInfoRow('Timestamp', meta['timestamp']),
+          _buildInfoRow('App Name', meta['appName']),
+          _buildInfoRow('Package', meta['packageName']),
 
-            // --- API FINDINGS ---
-            if (!_isEmpty(apiFindings)) ...[
-              Text("4. API Findings",
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 18, color: kAuthNavy)),
-              const SizedBox(height: 8),
-              ...apiFindings.map<Widget>((f) {
-                final d = f['details'];
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(d?['title'] ?? 'No title'),
-                  subtitle: Text(
-                      "Type: ${f['type']} | Category: ${f['category']}\nSubtitle: ${d?['subtitle'] ?? 'N/A'}"),
-                );
-              }),
-              const Divider(height: 30),
-            ],
+          if (deviceInfo != null) ...[
+            const SizedBox(height: 10),
+            const Divider(),
+            const SizedBox(height: 10),
+            const Text('Device Information', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kAuthNavy)),
+            const SizedBox(height: 10),
+            _buildInfoRow('Manufacturer', deviceInfo!['manufacturer']),
+            _buildInfoRow('Model', deviceInfo!['model']),
+            _buildInfoRow('Android', '${deviceInfo!['androidVersion']} (API ${deviceInfo!['sdkInt']})'),
+            _buildInfoRow('Brand', deviceInfo!['brand']),
+          ],
 
-            // --- OTHER FINDINGS ---
-            if (!_isEmpty(cryptoFindings) ||
-                !_isEmpty(storageFindings) ||
-                !_isEmpty(networkFindings) ||
-                !_isEmpty(memoryFindings)) ...[
-              Text("5. Other Findings",
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 18, color: kAuthNavy)),
-              if (!_isEmpty(cryptoFindings)) Text("Crypto Findings: ${cryptoFindings.toString()}"),
-              if (!_isEmpty(storageFindings)) Text("Storage Findings: ${storageFindings.toString()}"),
-              if (!_isEmpty(networkFindings)) Text("Network Findings: ${networkFindings.toString()}"),
-              if (!_isEmpty(memoryFindings)) Text("Memory Findings: ${memoryFindings.toString()}"),
-              const Divider(height: 30),
-            ],
+          const SizedBox(height: 20),
+          const Divider(),
+          const SizedBox(height: 20),
 
-            // --- EXPORT BUTTON ---
-            Center(
-              child: ElevatedButton.icon(
-                onPressed: () => _showExportOptions(context, scanData!),
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: kSkyBlue,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
-                icon: const Icon(Icons.download, color: kAuthNavy),
-                label: const Text("Export Report",
-                    style: TextStyle(color: kAuthNavy, fontWeight: FontWeight.bold)),
+          // Vulnerabilities
+          const Text('Detected Threats', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kAuthNavy)),
+          const SizedBox(height: 10),
+          if (vulns.isEmpty)
+            const Text('No vulnerabilities detected', style: TextStyle(color: Colors.green))
+          else
+            ...vulns.map((v) => _buildVulnerabilityCard(v)),
+
+          // ML Results
+          if (mlResults['spoofDetection'] != null || mlResults['anomalyDetection'] != null) ...[
+            const SizedBox(height: 20),
+            const Divider(),
+            const SizedBox(height: 20),
+            const Text('ML Analysis', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kAuthNavy)),
+            const SizedBox(height: 10),
+            if (mlResults['spoofDetection'] != null) _buildMLResultCard('Spoof Detection', mlResults['spoofDetection']),
+            if (mlResults['anomalyDetection'] != null) _buildMLResultCard('Anomaly Detection', mlResults['anomalyDetection']),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimingTab() {
+    // Check if timing data exists
+    final vulns = scanData!['vulnerabilities'] as List<String>;
+
+    final hasTimingAttacks = vulns.any((v) => v.contains('TIMING') || v.contains('CONSTANT_TIME') || v.contains('CORRELATION'));
+
+    if (!hasTimingAttacks) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.check_circle, size: 80, color: Colors.green.shade300),
+              const SizedBox(height: 20),
+              const Text('No Timing Vulnerabilities', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              const Text('This scan did not detect any timing-related security issues.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Timing Attack Analysis', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kAuthNavy)),
+          const SizedBox(height: 10),
+          const Text('Timing attacks exploit predictable delays in biometric authentication to bypass security.', style: TextStyle(color: Colors.grey)),
+          const SizedBox(height: 20),
+
+          ...vulns.where((v) => v.contains('TIMING') || v.contains('CONSTANT_TIME') || v.contains('CORRELATION')).map((v) => _buildVulnerabilityCard(v)),
+
+          const SizedBox(height: 20),
+          const Text('Recommendations', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
+          _buildRecommendationCard('Implement constant-time authentication', 'Ensure all authentication paths take the same amount of time'),
+          _buildRecommendationCard('Add random delays', 'Introduce 50-150ms random delays to mask timing patterns'),
+          _buildRecommendationCard('Use secure timing functions', 'Avoid timing-dependent conditional branches'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMitigationsTab() {
+    final vulns = scanData!['vulnerabilities'] as List<String>;
+    final score = scanData!['metadata']['riskScore'] as int;
+
+    if (vulns.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.verified_user, size: 80, color: Colors.green.shade300),
+              const SizedBox(height: 20),
+              const Text('Secure Implementation', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              const Text('No security vulnerabilities detected. Continue following best practices.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Security Recommendations', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kAuthNavy)),
+          const SizedBox(height: 10),
+          Text('Based on $score/100 security score, here are recommended fixes:', style: const TextStyle(color: Colors.grey)),
+          const SizedBox(height: 20),
+
+          // Generate mitigations for each threat
+          ...vulns.map((v) => _buildMitigationSection(v)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 120, child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.bold))),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVulnerabilityCard(String vulnerability) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(Icons.warning_amber, color: Colors.orange, size: 32),
+            const SizedBox(width: 12),
+            Expanded(child: Text(vulnerability, style: const TextStyle(fontSize: 14))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMLResultCard(String title, Map<String, dynamic> result) {
+    final classification = result['classification'] ?? 'unknown';
+    final confidence = ((result['confidence'] ?? 0) * 100).toStringAsFixed(1);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 8),
+            Text('Classification: $classification'),
+            Text('Confidence: $confidence%'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecommendationCard(String title, String description) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: Colors.blue.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(Icons.lightbulb_outline, color: Colors.blue.shade700),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text(description, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                ],
               ),
             ),
           ],
@@ -188,219 +381,99 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen> {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // ------------------------- EXPORT FUNCTIONS --------------------------------
-  // ---------------------------------------------------------------------------
+  Widget _buildMitigationSection(String vulnerability) {
+    String title = 'Security Mitigation';
+    String description = 'Implement security best practices';
+    List<String> steps = [];
 
-  void _showExportOptions(BuildContext context, Map<String, dynamic> data) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: kAuthNavy,
-        title: const Text("Export Scan Report",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: const Text("Choose export format:",
-            style: TextStyle(color: Colors.white70)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel", style: TextStyle(color: Colors.white)),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              exportPdfFromJson(context, data);
-            },
-            child: const Text("PDF", style: TextStyle(color: kSkyBlue)),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              exportCsvFromJson(context, data);
-            },
-            child: const Text("CSV", style: TextStyle(color: kSkyBlue)),
+    if (vulnerability.contains('TIMING_ATTACK')) {
+      title = 'Fix Timing Attack';
+      description = 'Detected: Authentication completed in < 100ms, vulnerable to timing analysis';
+      steps = [
+        'Add minimum 200ms authentication time',
+        'Implement constant-time operations',
+        'Add random delays (50-150ms)',
+        'Use secure timing functions',
+      ];
+    } else if (vulnerability.contains('CONSTANT_TIME')) {
+      title = 'Fix Constant-Time Leak';
+      description = 'Detected: Authentication timing variance detected';
+      steps = [
+        'Ensure all code paths take same time',
+        'Avoid timing-dependent branches',
+        'Use timing-safe comparison functions',
+        'Add noise injection',
+      ];
+    } else if (vulnerability.contains('REPLAY_ATTACK')) {
+      title = 'Fix Replay Attack';
+      description = 'Detected: Authentication can be replayed';
+      steps = [
+        'Implement nonce-based authentication',
+        'Add timestamp validation',
+        'Use one-time tokens',
+        'Implement session management',
+      ];
+    } else if (vulnerability.contains('ML_SPOOF')) {
+      title = 'Fix ML Spoof Detection';
+      description = 'Detected: ML model detected spoofing attempt';
+      steps = [
+        'Use BiometricPrompt with CryptoObject',
+        'Enable liveness detection',
+        'Implement challenge-response',
+        'Add secondary verification',
+      ];
+    } else if (vulnerability.contains('ML_ANOMALY')) {
+      title = 'Fix ML Anomaly Detection';
+      description = 'Detected: Unusual authentication patterns';
+      steps = [
+        'Review authentication flow',
+        'Implement rate limiting',
+        'Add behavioral monitoring',
+        'Check for automated attacks',
+      ];
+    }
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: ExpansionTile(
+        leading: const Icon(Icons.build, color: kAuthNavy),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text(description, style: const TextStyle(fontSize: 12)),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Recommended Steps:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                ...steps.map((step) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('• ', style: TextStyle(fontSize: 16)),
+                      Expanded(child: Text(step)),
+                    ],
+                  ),
+                )),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  // ----------------------------- PDF EXPORT ----------------------------------
-  Future<void> exportPdfFromJson(
-      BuildContext context, Map<String, dynamic> jsonData) async {
-    try {
-      final pdf = pw.Document();
-      final meta = jsonData['metadata'];
-      final vulns = jsonData['vulnerabilities'] ?? [];
-      final timing = jsonData['timingData'];
-      final apiFindings = jsonData['apiFindings'];
-      final cryptoFindings = jsonData['cryptoFindings'];
-      final storageFindings = jsonData['storageFindings'];
-      final networkFindings = jsonData['networkFindings'];
-      final memoryFindings = jsonData['memoryFindings'];
-      final device = meta?['deviceInfo'];
-
-      pdf.addPage(
-        pw.MultiPage(
-          build: (pw.Context ctx) => [
-            pw.Header(level: 0, text: "Biometric Security Scan Report"),
-
-            if (!_isEmpty(meta))
-              pw.Column(children: [
-                pw.Header(level: 1, text: "1. Metadata"),
-                pw.Paragraph(text:
-                "Scan ID: ${meta['scanId']}\nTimestamp: ${meta['timestamp']}\nDevice: ${device?['manufacturer']} ${device?['model']} (${device?['device']})\nAndroid Version: ${device?['androidVersion']}, SDK: ${device?['sdkInt']}\nBrand: ${device?['brand']}\nFingerprint: ${device?['fingerprint']}"),
-              ]),
-
-            if (!_isEmpty(vulns))
-              pw.Column(children: [
-                pw.Header(level: 1, text: "2. Vulnerabilities"),
-                ...vulns.map<pw.Widget>((v) => pw.Container(
-                  margin: const pw.EdgeInsets.only(bottom: 10),
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                          "[${v['type']}] - Severity: ${v['severity']} | Category: ${v['category']}",
-                          style:
-                          pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                      pw.Bullet(text: "Title: ${v['title']}"),
-                      if (!_isEmpty(v['description']))
-                        pw.Bullet(text: "Description: ${v['description']}"),
-                      if (!_isEmpty(v['impact']))
-                        pw.Bullet(text: "Impact: ${v['impact']}"),
-                      if (!_isEmpty(v['mitigation']))
-                        pw.Bullet(text: "Mitigation: ${v['mitigation']}"),
-                      if (!_isEmpty(v['technicalDetails']))
-                        pw.Bullet(
-                            text:
-                            "Technical Details: ${v['technicalDetails'].toString()}"),
-                      if (!_isEmpty(v['references']))
-                        pw.Bullet(
-                            text:
-                            "References:\n${(v['references'] as List).map((r) => '- $r').join('\n')}"),
-                      pw.Text("Detected At: ${v['detectedAt']}",
-                          style: const pw.TextStyle(fontSize: 10)),
-                    ],
-                  ),
-                )),
-              ]),
-
-            if (!_isEmpty(timing))
-              pw.Column(children: [
-                pw.Header(level: 1, text: "3. Timing Data"),
-                if (!_isEmpty(timing['attempts']))
-                  pw.Paragraph(
-                      text:
-                      "Attempts:\n${(timing['attempts'] as List).map((a) => '• Result: ${a['result']}, Duration: ${a['duration']}s, Timestamp: ${a['timestamp']}').join('\n')}"),
-              ]),
-
-            if (!_isEmpty(apiFindings))
-              pw.Column(children: [
-                pw.Header(level: 1, text: "4. API Findings"),
-                ...apiFindings.map<pw.Widget>((f) {
-                  final d = f['details'];
-                  return pw.Paragraph(
-                      text:
-                      "Type: ${f['type']}\nCategory: ${f['category']}\nTitle: ${d?['title']}\nSubtitle: ${d?['subtitle']}\nDescription: ${d?['description'] ?? 'N/A'}");
-                }).toList(),
-              ]),
-
-            if (!_isEmpty(cryptoFindings) ||
-                !_isEmpty(storageFindings) ||
-                !_isEmpty(networkFindings) ||
-                !_isEmpty(memoryFindings))
-              pw.Column(children: [
-                pw.Header(level: 1, text: "5. Other Findings"),
-                if (!_isEmpty(cryptoFindings))
-                  pw.Paragraph(text: "Crypto Findings: ${cryptoFindings.toString()}"),
-                if (!_isEmpty(storageFindings))
-                  pw.Paragraph(text: "Storage Findings: ${storageFindings.toString()}"),
-                if (!_isEmpty(networkFindings))
-                  pw.Paragraph(text: "Network Findings: ${networkFindings.toString()}"),
-                if (!_isEmpty(memoryFindings))
-                  pw.Paragraph(text: "Memory Findings: ${memoryFindings.toString()}"),
-              ]),
-          ],
-        ),
-      );
-
-      final dir = await getDownloadsDirectory();
-      final scanId = jsonData['metadata']?['scanId'] ?? 'unknown';
-      final file = File("${dir!.path}/scan_${scanId}_report.pdf");
-      await file.writeAsBytes(await pdf.save());
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('PDF report saved to: ${file.path}')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error exporting PDF: $e')));
-    }
+  Color _getScoreColor(int score) {
+    if (score >= 80) return Colors.green;
+    if (score >= 60) return Colors.orange;
+    return Colors.red;
   }
 
-  // ----------------------------- CSV EXPORT ----------------------------------
-  Future<void> exportCsvFromJson(
-      BuildContext context, Map<String, dynamic> jsonData) async {
-    try {
-      final List<List<dynamic>> rows = [];
-      rows.add(['Section', 'Field', 'Value']);
-
-      void addRow(String section, String field, dynamic value) {
-        if (_isEmpty(value)) return;
-        rows.add([section, field, value]);
-      }
-
-      final meta = jsonData['metadata'];
-      if (!_isEmpty(meta)) {
-        addRow('metadata', 'scanId', meta['scanId']);
-        addRow('metadata', 'timestamp', meta['timestamp']);
-        final dev = meta['deviceInfo'];
-        if (!_isEmpty(dev)) dev.forEach((k, v) => addRow('metadata_deviceInfo', k, v));
-      }
-
-      final vulns = jsonData['vulnerabilities'] ?? [];
-      for (var i = 0; i < vulns.length; i++) {
-        vulns[i].forEach((k, val) {
-          if (!_isEmpty(val)) addRow('vulnerability_${i + 1}', k, val);
-        });
-      }
-
-      final timing = jsonData['timingData'];
-      if (!_isEmpty(timing) && !_isEmpty(timing['attempts'])) {
-        for (var a in timing['attempts']) {
-          a.forEach((k, v) => addRow('timing_attempt', k, v));
-        }
-      }
-
-      final apiFindings = jsonData['apiFindings'] ?? [];
-      for (var i = 0; i < apiFindings.length; i++) {
-        final f = apiFindings[i];
-        addRow('apiFinding_${i + 1}', 'type', f['type']);
-        addRow('apiFinding_${i + 1}', 'category', f['category']);
-        final d = f['details'];
-        if (!_isEmpty(d)) d.forEach((k, v) => addRow('apiFinding_${i + 1}_details', k, v));
-      }
-
-      for (final cat
-      in ['cryptoFindings', 'storageFindings', 'networkFindings', 'memoryFindings']) {
-        final data = jsonData[cat];
-        if (!_isEmpty(data)) addRow(cat, 'data', data.toString());
-      }
-
-      final csvData = const ListToCsvConverter().convert(rows);
-
-      final dir = await getDownloadsDirectory();
-      final scanId = jsonData['metadata']?['scanId'] ?? 'unknown';
-      final file = File("${dir!.path}/scan_${scanId}_report.csv");
-      await file.writeAsString(csvData);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('CSV report saved to: ${file.path}')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error exporting CSV: $e')));
-    }
+  IconData _getScoreIcon(int score) {
+    if (score >= 80) return Icons.check_circle;
+    if (score >= 60) return Icons.warning;
+    return Icons.error;
   }
 }

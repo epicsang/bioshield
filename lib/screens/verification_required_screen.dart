@@ -12,6 +12,35 @@ class VerificationRequiredScreen extends StatefulWidget {
 
 class _VerificationRequiredScreenState extends State<VerificationRequiredScreen> {
   late final FirebaseAuth _auth = FirebaseAuth.instance;
+  bool _emailSent = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Automatically send verification email when screen loads
+    _sendVerificationEmail();
+  }
+
+  Future<void> _sendVerificationEmail() async {
+    if (_emailSent) return; // Don't send multiple times
+
+    try {
+      final user = _auth.currentUser;
+      if (user != null && !user.emailVerified) {
+        await user.sendEmailVerification();
+        setState(() {
+          _emailSent = true;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Verification email sent! Please check your inbox.")),
+          );
+        }
+      }
+    } catch (e) {
+      print("Error sending verification email: $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,19 +70,10 @@ class _VerificationRequiredScreenState extends State<VerificationRequiredScreen>
               const SizedBox(height: 40),
               ElevatedButton(
                 onPressed: () async {
-                  try {
-                    final user = _auth.currentUser;
-                    if (user != null) {
-                      await user.sendEmailVerification();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Verification email sent!")),
-                      );
-                    }
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Failed to send email.")),
-                    );
-                  }
+                  setState(() {
+                    _emailSent = false;
+                  });
+                  await _sendVerificationEmail();
                 },
                 child: const Text("Resend Verification Email"),
               ),
