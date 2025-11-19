@@ -106,42 +106,42 @@ class PermissionsService {
               ),
             ],
           ),
-          content: const Column(
+          content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'BioShield needs storage access to:',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: kTextPrimary),
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: kAuthNavy),
               ),
-              SizedBox(height: 12),
-              _PermissionItem(
+              const SizedBox(height: 12),
+              const _PermissionItem(
                 icon: Icons.security,
                 text: 'Read Frida scan results from repackaged apps',
               ),
-              SizedBox(height: 8),
-              _PermissionItem(
+              const SizedBox(height: 8),
+              const _PermissionItem(
                 icon: Icons.upload_file,
                 text: 'Import APK files for repackaging',
               ),
-              SizedBox(height: 8),
-              _PermissionItem(
+              const SizedBox(height: 8),
+              const _PermissionItem(
                 icon: Icons.save,
                 text: 'Export scan reports (PDF/CSV)',
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               Text(
                 'Without storage access, BioShield cannot read scan results or repackage apps.',
-                style: TextStyle(fontSize: 13, color: kTextSecondary),
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
               ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text(
+              child: Text(
                 'Not Now',
-                style: TextStyle(color: kTextSecondary),
+                style: TextStyle(color: Colors.grey.shade700),
               ),
             ),
             ElevatedButton(
@@ -182,12 +182,12 @@ class PermissionsService {
           content: const Text(
             'Storage permission is required for BioShield to function properly.\n\n'
             'Please grant storage access in Settings.',
-            style: TextStyle(color: kTextPrimary),
+            style: TextStyle(color: kAuthNavy),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel', style: TextStyle(color: kTextSecondary)),
+              child: Text('Cancel', style: TextStyle(color: Colors.grey.shade700)),
             ),
             ElevatedButton(
               onPressed: () {
@@ -234,12 +234,12 @@ class _PermissionItem extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 20, color: kActiveNavy),
+        Icon(icon, size: 20, color: kAuthNavy),
         const SizedBox(width: 12),
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(fontSize: 14, color: kTextPrimary),
+            style: const TextStyle(fontSize: 14, color: kAuthNavy),
           ),
         ),
       ],
