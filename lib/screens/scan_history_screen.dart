@@ -661,7 +661,7 @@ class _ScanHistoryScreenState extends State<ScanHistoryScreen> {
             return Vulnerability(
               type: VulnerabilityType.values.firstWhere(
                 (e) => e.toString() == 'VulnerabilityType.${vulnMap['type']}',
-                orElse: () => VulnerabilityType.spoofAttempt,
+                orElse: () => VulnerabilityType.timingAttack,
               ),
               severity: Severity.values.firstWhere(
                 (e) => e.toString() == 'Severity.${vulnMap['severity']}',
@@ -679,6 +679,12 @@ class _ScanHistoryScreenState extends State<ScanHistoryScreen> {
           title: 'Review Security Settings',
           description: 'Check your biometric authentication settings and ensure they meet security standards.',
           priority: Priority.high,
+          actionItems: [
+            'Review biometric authentication implementation',
+            'Check for proper error handling',
+            'Verify security best practices are followed',
+          ],
+          codeExample: 'BiometricPrompt.Builder(context).setAllowedAuthenticators(BIOMETRIC_STRONG).build()',
           estimatedHours: 1,
         ),
       ];
