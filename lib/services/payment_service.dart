@@ -183,18 +183,23 @@ class PaymentService {
           mode: LaunchMode.externalApplication,
         );
 
-        // Mark as pending in database
-        await _firestore
-            .collection('users')
-            .doc(user.uid)
-            .collection('subscription')
-            .doc('current')
-            .set({
-          'plan': plan.toString().split('.').last,
-          'status': SubscriptionStatus.pending.toString().split('.').last,
-          'price': plan == SubscriptionPlan.monthly ? MONTHLY_PRICE : YEARLY_PRICE,
-          'initiatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        // Try to mark as pending in database (optional - don't fail if this errors)
+        try {
+          await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection('subscription')
+              .doc('current')
+              .set({
+            'plan': plan.toString().split('.').last,
+            'status': SubscriptionStatus.pending.toString().split('.').last,
+            'price': plan == SubscriptionPlan.monthly ? MONTHLY_PRICE : YEARLY_PRICE,
+            'initiatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        } catch (dbError) {
+          // Log but don't fail - the payment link opened successfully
+          print('⚠️ Could not update pending status in database: $dbError');
+        }
 
         print('✅ Payment link opened successfully');
         return PaymentResult.success('pending');

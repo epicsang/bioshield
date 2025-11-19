@@ -339,7 +339,7 @@ class _ScanScreenState extends State<ScanScreen> {
               onPressed: _isMonitoring ? _stopMonitoring : _startMonitoring,
               style: ElevatedButton.styleFrom(
                 backgroundColor: _isMonitoring ? Colors.red : kSkyBlue,
-                foregroundColor: Colors.white,
+                foregroundColor: _isMonitoring ? Colors.white : kAuthNavy,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),

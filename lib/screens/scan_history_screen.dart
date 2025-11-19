@@ -12,6 +12,9 @@ import '../constants/colors.dart';
 import '../models/user_model.dart';
 import 'pricing_screen.dart';
 import 'scan_details_screen.dart';
+import '../services/export_service.dart';
+import '../services/biometric_service.dart';
+import '../services/recommendation_engine.dart';
 
 class ScanHistoryScreen extends StatefulWidget {
   final bool isPremium;
@@ -375,11 +378,9 @@ class _ScanHistoryScreenState extends State<ScanHistoryScreen> {
                             ),
                           ),
                           TextButton(
-                            onPressed: () {
+                            onPressed: () async {
                               Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text("Exporting as PDF...")),
-                              );
+                              await _exportAsPDF();
                             },
                             child: const Text(
                               "PDF",
@@ -390,11 +391,9 @@ class _ScanHistoryScreenState extends State<ScanHistoryScreen> {
                             ),
                           ),
                           TextButton(
-                            onPressed: () {
+                            onPressed: () async {
                               Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text("Exporting as CSV...")),
-                              );
+                              await _exportAsCSV();
                             },
                             child: const Text(
                               "CSV",
@@ -520,6 +519,214 @@ class _ScanHistoryScreenState extends State<ScanHistoryScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _exportAsCSV() async {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Exporting scans as CSV..."),
+        backgroundColor: kSkyBlue,
+      ),
+    );
+
+    try {
+      final exportService = ExportService();
+
+      // Prepare scan data for CSV export
+      final csvData = _allScans.map((scan) {
+        return {
+          'scanId': scan['scanId'] ?? 'N/A',
+          'timestamp': (scan['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          'biometricType': scan['biometricType'] ?? 'fingerprint',
+          'riskScore': scan['riskScore'] ?? 0,
+          'status': scan['status'] ?? 'unknown',
+          'duration': scan['duration'] ?? 0,
+          'vulnerabilities': scan['vulnerabilities'] ?? [],
+          'resultSummary': scan['resultSummary'] ?? 'No summary',
+        };
+      }).toList();
+
+      final result = await exportService.exportToCSV(scanResults: csvData);
+
+      if (!mounted) return;
+
+      if (result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "✓ CSV exported successfully!\nSaved to: ${result.filePath}",
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'OK',
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "✗ Export failed: ${result.errorMessage}",
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("✗ Export error: $e"),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
+  Future<void> _exportAsPDF() async {
+    if (!mounted) return;
+
+    // Show scan selection dialog
+    final selectedScan = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: kAuthNavy,
+        titleTextStyle: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+        ),
+        contentTextStyle: const TextStyle(color: Colors.white),
+        title: const Text("Select Scan for PDF Export"),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: _allScans.isEmpty
+              ? const Text("No scans available to export")
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _allScans.length,
+                  itemBuilder: (context, index) {
+                    final scan = _allScans[index];
+                    final timestamp = (scan['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now();
+                    final score = ((scan['riskScore'] as num?) ?? 0).toInt();
+
+                    return ListTile(
+                      title: Text(
+                        DateFormat('MMM d, y - HH:mm').format(timestamp),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      subtitle: Text(
+                        "Risk Score: $score/100",
+                        style: const TextStyle(color: kSkyBlue),
+                      ),
+                      onTap: () => Navigator.pop(ctx, scan),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              "Cancel",
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (selectedScan == null || !mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Exporting scan as PDF..."),
+        backgroundColor: kSkyBlue,
+      ),
+    );
+
+    try {
+      final exportService = ExportService();
+
+      // Convert vulnerabilities to proper format
+      final vulnList = (selectedScan['vulnerabilities'] as List<dynamic>?)
+          ?.map((v) {
+            final vulnMap = v as Map<String, dynamic>;
+            return Vulnerability(
+              type: VulnerabilityType.values.firstWhere(
+                (e) => e.toString() == 'VulnerabilityType.${vulnMap['type']}',
+                orElse: () => VulnerabilityType.spoofAttempt,
+              ),
+              severity: Severity.values.firstWhere(
+                (e) => e.toString() == 'Severity.${vulnMap['severity']}',
+                orElse: () => Severity.medium,
+              ),
+              description: vulnMap['description'] ?? 'Unknown',
+              recommendation: vulnMap['recommendation'] ?? 'No recommendation',
+            );
+          })
+          .toList() ?? [];
+
+      // Generate basic recommendations
+      final recommendations = [
+        Recommendation(
+          title: 'Review Security Settings',
+          description: 'Check your biometric authentication settings and ensure they meet security standards.',
+          priority: Priority.high,
+          estimatedHours: 1,
+        ),
+      ];
+
+      final result = await exportService.exportToPDF(
+        scanResult: selectedScan,
+        vulnerabilities: vulnList,
+        recommendations: recommendations,
+      );
+
+      if (!mounted) return;
+
+      if (result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "✓ PDF exported successfully!\nSaved to: ${result.filePath}",
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'OK',
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "✗ Export failed: ${result.errorMessage}",
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("✗ Export error: $e"),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
   }
 }
 

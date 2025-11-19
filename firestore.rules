@@ -4,20 +4,21 @@ service cloud.firestore {
 
     // BioShield logs collection
     // Structure: bioshield_logs/{userId}/{packageName}/{eventId}
-    match /bioshield_logs/{userId}/{package}/{event} {
+    match /bioshield_logs/{userId} {
+      match /{packageName}/{eventId} {
+        // Hooked apps can write (no auth required)
+        // This allows repackaged apps to upload biometric events to Firestore
+        allow write: if true;
 
-      // Hooked apps can write (no auth required)
-      // This allows repackaged apps to upload biometric events to Firestore
-      allow write: if true;
+        // Only BioShield with matching userId can read
+        // For security, users can only read their own logs
+        // Option 1: If using Firebase Auth (recommended)
+        allow read: if request.auth != null && request.auth.uid == userId;
 
-      // Only BioShield with matching userId can read
-      // For security, users can only read their own logs
-      // Option 1: If using Firebase Auth (recommended)
-      allow read: if request.auth != null && request.auth.uid == userId;
-
-      // Option 2: If NOT using Firebase Auth (fallback - less secure)
-      // Uncomment the line below and comment out the line above if not using Firebase Auth
-      // allow read: if true;
+        // Option 2: If NOT using Firebase Auth (fallback - less secure)
+        // Uncomment the line below and comment out the line above if not using Firebase Auth
+        // allow read: if true;
+      }
     }
 
     // Users collection (for BioShield app user data)
@@ -28,6 +29,18 @@ service cloud.firestore {
       // Scans subcollection
       match /scans/{scanId} {
         // Users can read and write their own scans
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Subscription subcollection
+      match /subscription/{subscriptionId} {
+        // Users can read and write their own subscription data
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Transactions subcollection
+      match /transactions/{transactionId} {
+        // Users can read and write their own transaction history
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }

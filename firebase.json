@@ -1,1 +1,24 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"bioshield-71eee","appId":"1:588253206520:android:b92f4bc90d4fdde33b280d","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"bioshield-71eee","configurations":{"android":"1:588253206520:android:b92f4bc90d4fdde33b280d"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "bioshield-71eee",
+          "appId": "1:588253206520:android:b92f4bc90d4fdde33b280d",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "bioshield-71eee",
+          "configurations": {
+            "android": "1:588253206520:android:b92f4bc90d4fdde33b280d"
+          }
+        }
+      }
+    }
+  }
+}
