@@ -5,7 +5,8 @@ Welcome to the BioShield Frida Gadget APK Repack Guide!
 ## Contents
 
 ### Main Documentation
-- **[REPACK_GUIDE.md](REPACK_GUIDE.md)** - Complete step-by-step guide for repacking APKs with Frida Gadget
+- **[REPACK_GUIDE.md](REPACK_GUIDE.md)** - Complete automated step-by-step guide for repacking APKs with Frida Gadget
+- **[MANUAL_HOOKING_GUIDE.md](MANUAL_HOOKING_GUIDE.md)** - Comprehensive manual hooking guide for advanced customization
 
 ### Reference Files
 
@@ -24,11 +25,19 @@ The `reference_files/` folder contains all the necessary scripts and configurati
 
 ## Quick Start
 
+### For Automated Repacking (Recommended)
 1. Read [REPACK_GUIDE.md](REPACK_GUIDE.md) thoroughly
 2. Gather all prerequisites listed in the guide
-3. Copy `frida_biometric_script.js` - this will become `libfrida-gadget.script.so`
-4. Follow the 7-step process in the guide
+3. Use the automation scripts in `reference_files/scripts/`
+4. Follow the 7-step automated process
 5. Test on your device using the verification steps
+
+### For Manual Hooking (Advanced)
+1. Read [MANUAL_HOOKING_GUIDE.md](MANUAL_HOOKING_GUIDE.md) to understand the internals
+2. Learn how to manually inject Gadget loaders into smali
+3. Write custom hook scripts tailored to your needs
+4. Debug and troubleshoot using advanced techniques
+5. Perfect for customization and learning
 
 ## What You'll Need (Not Included)
 
@@ -117,9 +126,27 @@ Common issues:
 - Gadget loads but no hooks → Missing `"on_load": "init"` in config
 - No events captured → Wrong biometric API or fingerprint not enrolled
 
+## Which Guide Should I Use?
+
+### Use [REPACK_GUIDE.md](REPACK_GUIDE.md) if:
+- ✅ You want a quick, automated solution
+- ✅ You're new to Frida Gadget
+- ✅ You want to use the standard BioShield hooks
+- ✅ You prefer scripts that do the heavy lifting
+
+### Use [MANUAL_HOOKING_GUIDE.md](MANUAL_HOOKING_GUIDE.md) if:
+- ✅ You want to understand how Frida works internally
+- ✅ You need to customize hook behavior
+- ✅ You're hooking non-standard APIs
+- ✅ You want to learn advanced techniques
+- ✅ You're debugging hook issues
+- ✅ You need full control over the process
+
 ## Support
 
-For detailed explanations of each step, error messages, and solutions, see the full guide: [REPACK_GUIDE.md](REPACK_GUIDE.md)
+For detailed explanations of each step, error messages, and solutions:
+- **Automated approach:** See [REPACK_GUIDE.md](REPACK_GUIDE.md)
+- **Manual approach:** See [MANUAL_HOOKING_GUIDE.md](MANUAL_HOOKING_GUIDE.md)
 
 ---
 
