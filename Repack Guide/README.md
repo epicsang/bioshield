@@ -7,6 +7,7 @@ Welcome to the BioShield Frida Gadget APK Repack Guide!
 ### Main Documentation
 - **[REPACK_GUIDE.md](REPACK_GUIDE.md)** - Complete automated step-by-step guide for repacking APKs with Frida Gadget
 - **[MANUAL_HOOKING_GUIDE.md](MANUAL_HOOKING_GUIDE.md)** - Comprehensive manual hooking guide for advanced customization
+- **[MANUAL_HOOKING_GUIDE.ipynb](MANUAL_HOOKING_GUIDE.ipynb)** - Interactive Jupyter notebook version of the manual guide with executable code cells
 
 ### Reference Files
 
@@ -34,10 +35,11 @@ The `reference_files/` folder contains all the necessary scripts and configurati
 
 ### For Manual Hooking (Advanced)
 1. Read [MANUAL_HOOKING_GUIDE.md](MANUAL_HOOKING_GUIDE.md) to understand the internals
-2. Learn how to manually inject Gadget loaders into smali
-3. Write custom hook scripts tailored to your needs
-4. Debug and troubleshoot using advanced techniques
-5. Perfect for customization and learning
+2. **OR** Use [MANUAL_HOOKING_GUIDE.ipynb](MANUAL_HOOKING_GUIDE.ipynb) for an interactive notebook experience
+3. Learn how to manually inject Gadget loaders into smali
+4. Write custom hook scripts tailored to your needs
+5. Debug and troubleshoot using advanced techniques
+6. Perfect for customization and learning
 
 ## What You'll Need (Not Included)
 
@@ -134,13 +136,14 @@ Common issues:
 - ✅ You want to use the standard BioShield hooks
 - ✅ You prefer scripts that do the heavy lifting
 
-### Use [MANUAL_HOOKING_GUIDE.md](MANUAL_HOOKING_GUIDE.md) if:
+### Use [MANUAL_HOOKING_GUIDE.md](MANUAL_HOOKING_GUIDE.md) or [MANUAL_HOOKING_GUIDE.ipynb](MANUAL_HOOKING_GUIDE.ipynb) if:
 - ✅ You want to understand how Frida works internally
 - ✅ You need to customize hook behavior
 - ✅ You're hooking non-standard APIs
 - ✅ You want to learn advanced techniques
 - ✅ You're debugging hook issues
 - ✅ You need full control over the process
+- ✅ You prefer an interactive notebook environment (.ipynb)
 
 ## Support
 
